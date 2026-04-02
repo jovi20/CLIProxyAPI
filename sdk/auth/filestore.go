@@ -197,6 +197,11 @@ func (s *FileTokenStore) readAuthFile(path, baseDir string) (*cliproxyauth.Auth,
 	if provider == "" {
 		provider = "unknown"
 	}
+	codexNoRefreshToken := false
+	if strings.EqualFold(provider, "codex") {
+		refreshToken, _ := metadata["refresh_token"].(string)
+		codexNoRefreshToken = strings.TrimSpace(refreshToken) == ""
+	}
 	if provider == "antigravity" || provider == "gemini" {
 		projectID := ""
 		if pid, ok := metadata["project_id"].(string); ok {
@@ -253,6 +258,9 @@ func (s *FileTokenStore) readAuthFile(path, baseDir string) (*cliproxyauth.Auth,
 	}
 	if email, ok := metadata["email"].(string); ok && email != "" {
 		auth.Attributes["email"] = email
+	}
+	if codexNoRefreshToken {
+		auth.Attributes["codex_no_rt"] = "true"
 	}
 	return auth, nil
 }

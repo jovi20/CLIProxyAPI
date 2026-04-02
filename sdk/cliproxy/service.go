@@ -277,6 +277,7 @@ func (s *Service) applyCoreAuthAddOrUpdate(ctx context.Context, auth *coreauth.A
 		return
 	}
 	auth = auth.Clone()
+	auth = s.applyCodexBridgeIfNeeded(auth)
 	s.ensureExecutorsForAuth(auth)
 
 	// IMPORTANT: Update coreManager FIRST, before model registration.
@@ -369,6 +370,72 @@ func openAICompatInfoFromAuth(a *coreauth.Auth) (providerKey string, compatName 
 	return "", "", false
 }
 
+func (s *Service) applyCodexBridgeIfNeeded(auth *coreauth.Auth) *coreauth.Auth {
+	if auth == nil {
+		return nil
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+	sourceProvider := provider
+	if auth.Attributes != nil {
+		if raw := strings.ToLower(strings.TrimSpace(auth.Attributes["bridge_source_provider"])); raw != "" {
+			sourceProvider = raw
+		}
+	}
+	if sourceProvider == "" || (provider == "codex-bridge" && sourceProvider == "codex-bridge") {
+		sourceProvider = "codex"
+	}
+	if provider != "codex" && provider != "codex-bridge" && sourceProvider != "codex" {
+		return auth
+	}
+
+	cfg := s.cfg
+	baseURL := ""
+	bridgeEnabled := false
+	if cfg != nil {
+		baseURL = strings.TrimSpace(cfg.CodexBridge.BaseURL)
+		bridgeEnabled = cfg.CodexBridge.Enabled
+	}
+
+	noRefreshToken := false
+	accessToken := ""
+	if auth.Attributes != nil {
+		noRefreshToken = strings.EqualFold(strings.TrimSpace(auth.Attributes["codex_no_rt"]), "true")
+	}
+	if auth.Metadata != nil {
+		if token, ok := auth.Metadata["access_token"].(string); ok {
+			accessToken = strings.TrimSpace(token)
+		}
+	}
+	shouldBridge := bridgeEnabled && baseURL != "" && noRefreshToken && accessToken != ""
+	if !shouldBridge {
+		if provider != "codex-bridge" {
+			return auth
+		}
+		restored := auth.Clone()
+		restored.Provider = sourceProvider
+		if restored.Attributes != nil {
+			delete(restored.Attributes, "base_url")
+			delete(restored.Attributes, "api_key")
+			delete(restored.Attributes, "codex_bridge")
+			delete(restored.Attributes, "bridge_source_provider")
+		}
+		return restored
+	}
+
+	bridged := auth.Clone()
+	bridged.Provider = "codex-bridge"
+	if bridged.Attributes == nil {
+		bridged.Attributes = make(map[string]string)
+	}
+	bridged.Attributes["auth_kind"] = "oauth"
+	bridged.Attributes["base_url"] = baseURL
+	bridged.Attributes["api_key"] = accessToken
+	bridged.Attributes["codex_bridge"] = "true"
+	bridged.Attributes["bridge_source_provider"] = "codex"
+	return bridged
+}
+
 func (s *Service) ensureExecutorsForAuth(a *coreauth.Auth) {
 	s.ensureExecutorsForAuthWithMode(a, false)
 }
@@ -453,16 +520,31 @@ func (s *Service) rebindExecutors() {
 	if s == nil || s.coreManager == nil {
 		return
 	}
+	ctx := coreauth.WithSkipPersist(context.Background())
 	auths := s.coreManager.List()
 	reboundCodex := false
 	for _, auth := range auths {
+		if auth == nil {
+			continue
+		}
+		auth = s.applyCodexBridgeIfNeeded(auth)
+		updated, err := s.coreManager.Update(ctx, auth)
+		if err != nil {
+			log.Errorf("failed to rebind auth %s during config refresh: %v", auth.ID, err)
+			continue
+		}
+		auth = updated
 		if auth != nil && strings.EqualFold(strings.TrimSpace(auth.Provider), "codex") {
 			if reboundCodex {
+				s.registerModelsForAuth(auth)
+				s.coreManager.RefreshSchedulerEntry(auth.ID)
 				continue
 			}
 			reboundCodex = true
 		}
 		s.ensureExecutorsForAuthWithMode(auth, true)
+		s.registerModelsForAuth(auth)
+		s.coreManager.RefreshSchedulerEntry(auth.ID)
 	}
 }
 
@@ -819,9 +901,13 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 		}
 	}
 	provider := strings.ToLower(strings.TrimSpace(a.Provider))
+	modelProvider := provider
+	if provider == "codex-bridge" {
+		modelProvider = "codex"
+	}
 	compatProviderKey, compatDisplayName, compatDetected := openAICompatInfoFromAuth(a)
 	if compatDetected {
-		provider = "openai-compatibility"
+		modelProvider = "openai-compatibility"
 	}
 	excluded := s.oauthExcludedModels(provider, authKind)
 	// The synthesizer pre-merges per-account and global exclusions into the "excluded_models" attribute.
@@ -832,7 +918,7 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 		}
 	}
 	var models []*ModelInfo
-	switch provider {
+	switch modelProvider {
 	case "gemini":
 		models = registry.GetGeminiModels()
 		if entry := s.resolveConfigGeminiKey(a); entry != nil {
