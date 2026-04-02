@@ -1,0 +1,58 @@
+# Example config for running CLIProxyAPI with the optional chat2api bridge
+# from `docker-compose.yml`.
+#
+# Usage:
+# 1. Copy this file to `config.yaml`, or set `CLI_PROXY_CONFIG_PATH=./config.codex-bridge.example.yaml`
+# 2. Start compose with `docker compose --profile codex-bridge up -d`
+# 3. Drop your Codex auth JSON files into `./auths`
+
+host: ""
+port: 8317
+
+auth-dir: "~/.cli-proxy-api"
+
+api-keys:
+  - "replace-with-a-local-api-key"
+
+debug: false
+
+codex-bridge:
+  enabled: true
+  base-url: "http://chat2api:5005/v1"
+  auto-delete-on-expiry: true
+
+oauth-model-alias:
+  codex-bridge:
+    - name: "gpt-5.4"
+      alias: "gpt-5.2"
+      fork: true
+    - name: "gpt-5.4"
+      alias: "gpt-5.2-codex"
+      fork: true
+    - name: "gpt-5.4"
+      alias: "gpt-5.3-codex"
+      fork: true
+    - name: "gpt-5.4"
+      alias: "gpt-5.1-codex-max"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5-codex"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5-codex-mini"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5.1"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5.1-codex"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5.1-codex-mini"
+      fork: true
+    - name: "gpt-5.3"
+      alias: "gpt-5.3-codex-spark"
+      fork: true

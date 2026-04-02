@@ -26,3 +26,20 @@ services:
       - ${CLI_PROXY_AUTH_PATH:-./auths}:/root/.cli-proxy-api
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs
     restart: unless-stopped
+
+  # Enable with `docker compose --profile codex-bridge up -d`
+  # or set `COMPOSE_PROFILES=codex-bridge` in `.env`.
+  chat2api:
+    profiles:
+      - codex-bridge
+    image: ${CHAT2API_IMAGE:-lanqian528/chat2api:latest}
+    container_name: chat2api
+    ports:
+      - "${CHAT2API_PORT:-5005}:5005"
+    environment:
+      HISTORY_DISABLED: ${CHAT2API_HISTORY_DISABLED:-true}
+      CONVERSATION_ONLY: ${CHAT2API_CONVERSATION_ONLY:-false}
+      ENABLE_LIMIT: ${CHAT2API_ENABLE_LIMIT:-true}
+      RANDOM_TOKEN: ${CHAT2API_RANDOM_TOKEN:-false}
+      SCHEDULED_REFRESH: ${CHAT2API_SCHEDULED_REFRESH:-false}
+    restart: unless-stopped
