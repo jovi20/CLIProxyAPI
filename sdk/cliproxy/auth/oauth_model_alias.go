@@ -7,6 +7,20 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v6/internal/thinking"
 )
 
+var builtInCodexBridgeOAuthModelAliases = []internalconfig.OAuthModelAlias{
+	{Name: "gpt-5.4", Alias: "gpt-5.2", Fork: true},
+	{Name: "gpt-5.4", Alias: "gpt-5.2-codex", Fork: true},
+	{Name: "gpt-5.4", Alias: "gpt-5.3-codex", Fork: true},
+	{Name: "gpt-5.4", Alias: "gpt-5.1-codex-max", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5-codex", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5-codex-mini", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5.1", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5.1-codex", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5.1-codex-mini", Fork: true},
+	{Name: "gpt-5.3", Alias: "gpt-5.3-codex-spark", Fork: true},
+}
+
 type modelAliasEntry interface {
 	GetName() string
 	GetAlias() string
@@ -18,13 +32,14 @@ type oauthModelAliasTable struct {
 }
 
 func compileOAuthModelAliasTable(aliases map[string][]internalconfig.OAuthModelAlias) *oauthModelAliasTable {
-	if len(aliases) == 0 {
+	effective := effectiveOAuthModelAliases(aliases)
+	if len(effective) == 0 {
 		return &oauthModelAliasTable{}
 	}
 	out := &oauthModelAliasTable{
-		reverse: make(map[string]map[string]string, len(aliases)),
+		reverse: make(map[string]map[string]string, len(effective)),
 	}
-	for rawChannel, entries := range aliases {
+	for rawChannel, entries := range effective {
 		channel := strings.ToLower(strings.TrimSpace(rawChannel))
 		if channel == "" || len(entries) == 0 {
 			continue
@@ -53,6 +68,44 @@ func compileOAuthModelAliasTable(aliases map[string][]internalconfig.OAuthModelA
 		out.reverse = nil
 	}
 	return out
+}
+
+func effectiveOAuthModelAliases(aliases map[string][]internalconfig.OAuthModelAlias) map[string][]internalconfig.OAuthModelAlias {
+	out := make(map[string][]internalconfig.OAuthModelAlias, len(aliases)+1)
+	for rawChannel, entries := range aliases {
+		channel := strings.ToLower(strings.TrimSpace(rawChannel))
+		if channel == "" || channel == "codex-bridge" || len(entries) == 0 {
+			continue
+		}
+		out[channel] = cloneOAuthModelAliases(entries)
+	}
+	out["codex-bridge"] = cloneOAuthModelAliases(builtInCodexBridgeOAuthModelAliases)
+	return out
+}
+
+func cloneOAuthModelAliases(entries []internalconfig.OAuthModelAlias) []internalconfig.OAuthModelAlias {
+	if len(entries) == 0 {
+		return nil
+	}
+	cloned := make([]internalconfig.OAuthModelAlias, len(entries))
+	copy(cloned, entries)
+	return cloned
+}
+
+// OAuthModelAliasesForChannel returns the effective alias list for a channel.
+// The codex-bridge channel is hardcoded and does not read from config.
+func OAuthModelAliasesForChannel(aliases map[string][]internalconfig.OAuthModelAlias, channel string) []internalconfig.OAuthModelAlias {
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	if channel == "" {
+		return nil
+	}
+	if channel == "codex-bridge" {
+		return cloneOAuthModelAliases(builtInCodexBridgeOAuthModelAliases)
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+	return cloneOAuthModelAliases(aliases[channel])
 }
 
 // SetOAuthModelAlias updates the OAuth model name alias table used during execution.

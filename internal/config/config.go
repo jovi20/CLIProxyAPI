@@ -117,15 +117,11 @@ type Config struct {
 
 	// OAuthModelAlias defines global model name aliases for OAuth/file-backed auth channels.
 	// These aliases affect both model listing and model routing for supported channels:
-	// gemini-cli, vertex, aistudio, antigravity, claude, codex, codex-bridge, qwen, iflow.
+	// gemini-cli, vertex, aistudio, antigravity, claude, codex, qwen, iflow.
 	//
 	// NOTE: This does not apply to existing per-credential model alias features under:
 	// gemini-api-key, codex-api-key, claude-api-key, openai-compatibility, vertex-api-key, and ampcode.
 	OAuthModelAlias map[string][]OAuthModelAlias `yaml:"oauth-model-alias,omitempty" json:"oauth-model-alias,omitempty"`
-
-	// CodexBridge configures the chat2api bridge fallback for Codex OAuth auths
-	// that only have an access token and cannot use the native Codex runtime.
-	CodexBridge CodexBridgeConfig `yaml:"codex-bridge" json:"codex-bridge"`
 
 	// AuthFileCleanup controls automatic deletion of file-backed auth credentials
 	// when upstream failures clearly indicate the credential is permanently invalid.
@@ -158,14 +154,6 @@ type ClaudeHeaderDefaults struct {
 type CodexHeaderDefaults struct {
 	UserAgent    string `yaml:"user-agent" json:"user-agent"`
 	BetaFeatures string `yaml:"beta-features" json:"beta-features"`
-}
-
-// CodexBridgeConfig configures the chat2api fallback for Codex auth entries
-// that do not have a refresh token and must be routed through the ChatGPT web API bridge.
-type CodexBridgeConfig struct {
-	Enabled            bool   `yaml:"enabled" json:"enabled"`
-	BaseURL            string `yaml:"base-url" json:"base-url"`
-	AutoDeleteOnExpiry bool   `yaml:"auto-delete-on-expiry" json:"auto-delete-on-expiry"`
 }
 
 // AuthFileCleanupConfig controls global cleanup of invalid file-backed auth credentials.
@@ -800,7 +788,7 @@ func (cfg *Config) SanitizeOAuthModelAlias() {
 	out := make(map[string][]OAuthModelAlias, len(cfg.OAuthModelAlias))
 	for rawChannel, aliases := range cfg.OAuthModelAlias {
 		channel := strings.ToLower(strings.TrimSpace(rawChannel))
-		if channel == "" || len(aliases) == 0 {
+		if channel == "" || channel == "codex-bridge" || len(aliases) == 0 {
 			continue
 		}
 		seenAlias := make(map[string]struct{}, len(aliases))

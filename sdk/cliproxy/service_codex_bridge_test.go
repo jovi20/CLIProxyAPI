@@ -10,12 +10,7 @@ import (
 
 func TestApplyCodexBridgeIfNeeded_RewritesCodexWithoutRefreshToken(t *testing.T) {
 	service := &Service{
-		cfg: &config.Config{
-			CodexBridge: config.CodexBridgeConfig{
-				Enabled: true,
-				BaseURL: "http://127.0.0.1:5005/v1",
-			},
-		},
+		cfg: &config.Config{},
 	}
 	original := &coreauth.Auth{
 		ID:       "codex-bridge-auth",
@@ -40,8 +35,8 @@ func TestApplyCodexBridgeIfNeeded_RewritesCodexWithoutRefreshToken(t *testing.T)
 	if rewritten.Provider != "codex-bridge" {
 		t.Fatalf("provider = %q, want %q", rewritten.Provider, "codex-bridge")
 	}
-	if got := rewritten.Attributes["base_url"]; got != "http://127.0.0.1:5005/v1" {
-		t.Fatalf("base_url = %q, want %q", got, "http://127.0.0.1:5005/v1")
+	if got := rewritten.Attributes["base_url"]; got != "http://chat2api:5005/v1" {
+		t.Fatalf("base_url = %q, want %q", got, "http://chat2api:5005/v1")
 	}
 	if got := rewritten.Attributes["api_key"]; got != "at-123" {
 		t.Fatalf("api_key = %q, want %q", got, "at-123")
@@ -54,7 +49,7 @@ func TestApplyCodexBridgeIfNeeded_RewritesCodexWithoutRefreshToken(t *testing.T)
 	}
 }
 
-func TestRebindExecutors_CodexBridgeConfigRewritesExistingAuth(t *testing.T) {
+func TestRebindExecutors_CodexBridgeDefaultsRewriteExistingAuth(t *testing.T) {
 	service := &Service{
 		cfg:         &config.Config{},
 		coreManager: coreauth.NewManager(nil, nil, nil),
@@ -78,10 +73,6 @@ func TestRebindExecutors_CodexBridgeConfigRewritesExistingAuth(t *testing.T) {
 		t.Fatalf("Register() error = %v", err)
 	}
 
-	service.cfg.CodexBridge = config.CodexBridgeConfig{
-		Enabled: true,
-		BaseURL: "http://127.0.0.1:5005/v1",
-	}
 	service.rebindExecutors()
 
 	updated, ok := service.coreManager.GetByID(auth.ID)
@@ -91,20 +82,14 @@ func TestRebindExecutors_CodexBridgeConfigRewritesExistingAuth(t *testing.T) {
 	if updated.Provider != "codex-bridge" {
 		t.Fatalf("provider = %q, want %q", updated.Provider, "codex-bridge")
 	}
-	if got := updated.Attributes["base_url"]; got != "http://127.0.0.1:5005/v1" {
-		t.Fatalf("base_url = %q, want %q", got, "http://127.0.0.1:5005/v1")
+	if got := updated.Attributes["base_url"]; got != "http://chat2api:5005/v1" {
+		t.Fatalf("base_url = %q, want %q", got, "http://chat2api:5005/v1")
 	}
 }
 
-func TestRegisterModelsForAuth_CodexBridgeUsesCodexCatalogAndBridgeAliases(t *testing.T) {
+func TestRegisterModelsForAuth_CodexBridgeUsesCodexCatalogAndBuiltInAliases(t *testing.T) {
 	service := &Service{
-		cfg: &config.Config{
-			OAuthModelAlias: map[string][]config.OAuthModelAlias{
-				"codex-bridge": {
-					{Name: "gpt-5.4", Alias: "gpt-5.4-web", Fork: true},
-				},
-			},
-		},
+		cfg: &config.Config{},
 	}
 	auth := &coreauth.Auth{
 		ID:       "codex-bridge-models",
@@ -132,8 +117,8 @@ func TestRegisterModelsForAuth_CodexBridgeUsesCodexCatalogAndBridgeAliases(t *te
 	if !containsModelID(models, "gpt-5.4") {
 		t.Fatal("expected codex bridge to expose codex base models")
 	}
-	if !containsModelID(models, "gpt-5.4-web") {
-		t.Fatal("expected codex bridge oauth aliases to be applied")
+	if !containsModelID(models, "gpt-5.2") {
+		t.Fatal("expected codex bridge built-in aliases to be applied")
 	}
 }
 

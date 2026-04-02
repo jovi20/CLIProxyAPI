@@ -54,3 +54,25 @@ func TestSanitizeOAuthModelAlias_AllowsMultipleAliasesForSameName(t *testing.T) 
 		}
 	}
 }
+
+func TestSanitizeOAuthModelAlias_DropsCodexBridgeChannel(t *testing.T) {
+	cfg := &Config{
+		OAuthModelAlias: map[string][]OAuthModelAlias{
+			"codex": {
+				{Name: "gpt-5", Alias: "g5"},
+			},
+			"codex-bridge": {
+				{Name: "gpt-5.4", Alias: "gpt-5.2", Fork: true},
+			},
+		},
+	}
+
+	cfg.SanitizeOAuthModelAlias()
+
+	if _, ok := cfg.OAuthModelAlias["codex-bridge"]; ok {
+		t.Fatal("expected codex-bridge oauth-model-alias config to be ignored")
+	}
+	if _, ok := cfg.OAuthModelAlias["codex"]; !ok {
+		t.Fatal("expected non-bridge oauth-model-alias config to remain")
+	}
+}

@@ -205,17 +205,15 @@ func TestApplyOAuthModelAlias_SuffixPreservation(t *testing.T) {
 	}
 }
 
-func TestResolveOAuthUpstreamModel_CodexBridgeChannel(t *testing.T) {
+func TestResolveOAuthUpstreamModel_CodexBridgeChannelUsesBuiltIns(t *testing.T) {
 	t.Parallel()
 
 	mgr := NewManager(nil, nil, nil)
 	mgr.SetConfig(&internalconfig.Config{})
-	mgr.SetOAuthModelAlias(map[string][]internalconfig.OAuthModelAlias{
-		"codex-bridge": {{Name: "gpt-5.4", Alias: "gpt-5.4-web"}},
-	})
+	mgr.SetOAuthModelAlias(nil)
 
 	auth := createAuthForChannel("codex-bridge")
-	if got := mgr.resolveOAuthUpstreamModel(auth, "gpt-5.4-web"); got != "gpt-5.4" {
+	if got := mgr.resolveOAuthUpstreamModel(auth, "gpt-5.2"); got != "gpt-5.4" {
 		t.Fatalf("resolveOAuthUpstreamModel() = %q, want %q", got, "gpt-5.4")
 	}
 }

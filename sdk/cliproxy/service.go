@@ -26,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const hardcodedCodexBridgeBaseURL = "http://chat2api:5005/v1"
+
 // Service wraps the proxy server lifecycle so external programs can embed the CLI proxy.
 // It manages the complete lifecycle including authentication, file watching, HTTP server,
 // and integration with various AI service providers.
@@ -389,14 +391,6 @@ func (s *Service) applyCodexBridgeIfNeeded(auth *coreauth.Auth) *coreauth.Auth {
 		return auth
 	}
 
-	cfg := s.cfg
-	baseURL := ""
-	bridgeEnabled := false
-	if cfg != nil {
-		baseURL = strings.TrimSpace(cfg.CodexBridge.BaseURL)
-		bridgeEnabled = cfg.CodexBridge.Enabled
-	}
-
 	noRefreshToken := false
 	accessToken := ""
 	if auth.Attributes != nil {
@@ -407,7 +401,7 @@ func (s *Service) applyCodexBridgeIfNeeded(auth *coreauth.Auth) *coreauth.Auth {
 			accessToken = strings.TrimSpace(token)
 		}
 	}
-	shouldBridge := bridgeEnabled && baseURL != "" && noRefreshToken && accessToken != ""
+	shouldBridge := noRefreshToken && accessToken != ""
 	if !shouldBridge {
 		if provider != "codex-bridge" {
 			return auth
@@ -429,7 +423,7 @@ func (s *Service) applyCodexBridgeIfNeeded(auth *coreauth.Auth) *coreauth.Auth {
 		bridged.Attributes = make(map[string]string)
 	}
 	bridged.Attributes["auth_kind"] = "oauth"
-	bridged.Attributes["base_url"] = baseURL
+	bridged.Attributes["base_url"] = hardcodedCodexBridgeBaseURL
 	bridged.Attributes["api_key"] = accessToken
 	bridged.Attributes["codex_bridge"] = "true"
 	bridged.Attributes["bridge_source_provider"] = "codex"
@@ -1508,14 +1502,18 @@ func rewriteModelInfoName(name, oldID, newID string) string {
 }
 
 func applyOAuthModelAlias(cfg *config.Config, provider, authKind string, models []*ModelInfo) []*ModelInfo {
-	if cfg == nil || len(models) == 0 {
+	if len(models) == 0 {
 		return models
 	}
 	channel := coreauth.OAuthModelAliasChannel(provider, authKind)
-	if channel == "" || len(cfg.OAuthModelAlias) == 0 {
+	if channel == "" {
 		return models
 	}
-	aliases := cfg.OAuthModelAlias[channel]
+	var configured map[string][]config.OAuthModelAlias
+	if cfg != nil {
+		configured = cfg.OAuthModelAlias
+	}
+	aliases := coreauth.OAuthModelAliasesForChannel(configured, channel)
 	if len(aliases) == 0 {
 		return models
 	}

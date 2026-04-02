@@ -1962,20 +1962,10 @@ func shouldDeleteInvalidFileAuth(cfg *internalconfig.Config, auth *Auth, result 
 	if auth == nil || result.Success || !isFileBackedAuth(auth) {
 		return false
 	}
-	if cfg != nil && cfg.AuthFileCleanup.Enabled {
-		return shouldDeleteByGlobalAuthFileCleanup(result)
-	}
-	return shouldDeleteByLegacyCodexBridgeCleanup(cfg, auth, result)
-}
-
-func shouldDeleteByLegacyCodexBridgeCleanup(cfg *internalconfig.Config, auth *Auth, result Result) bool {
-	if cfg == nil || auth == nil || !cfg.CodexBridge.AutoDeleteOnExpiry {
+	if cfg == nil || !cfg.AuthFileCleanup.Enabled {
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex-bridge") {
-		return false
-	}
-	return statusCodeFromResult(result.Error) == http.StatusUnauthorized
+	return shouldDeleteByGlobalAuthFileCleanup(result)
 }
 
 func shouldDeleteByGlobalAuthFileCleanup(result Result) bool {
