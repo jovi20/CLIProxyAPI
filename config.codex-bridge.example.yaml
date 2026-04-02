@@ -11,6 +11,9 @@ port: 8317
 
 auth-dir: "~/.cli-proxy-api"
 
+auth-file-cleanup:
+  enabled: true
+
 api-keys:
   - "replace-with-a-local-api-key"
 
@@ -19,7 +22,7 @@ debug: false
 codex-bridge:
   enabled: true
   base-url: "http://chat2api:5005/v1"
-  auto-delete-on-expiry: true
+  auto-delete-on-expiry: false
 
 oauth-model-alias:
   codex-bridge:

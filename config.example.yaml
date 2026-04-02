@@ -35,6 +35,12 @@ remote-management:
 # Authentication directory (supports ~ for home directory)
 auth-dir: "~/.cli-proxy-api"
 
+# Automatic cleanup for invalid file-backed auth credentials.
+# When enabled, CLIProxyAPI deletes auth JSON files only when upstream failures
+# clearly indicate the credential is permanently invalid.
+# auth-file-cleanup:
+#   enabled: false
+
 # API keys for authentication
 api-keys:
   - "your-api-key-1"
@@ -205,7 +211,7 @@ nonstream-keepalive-interval: 0
 # codex-bridge:
 #   enabled: false
 #   base-url: "http://127.0.0.1:5005/v1"
-#   auto-delete-on-expiry: true
+#   auto-delete-on-expiry: false
 
 # OpenAI compatibility providers
 # openai-compatibility:

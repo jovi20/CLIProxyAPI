@@ -127,6 +127,10 @@ type Config struct {
 	// that only have an access token and cannot use the native Codex runtime.
 	CodexBridge CodexBridgeConfig `yaml:"codex-bridge" json:"codex-bridge"`
 
+	// AuthFileCleanup controls automatic deletion of file-backed auth credentials
+	// when upstream failures clearly indicate the credential is permanently invalid.
+	AuthFileCleanup AuthFileCleanupConfig `yaml:"auth-file-cleanup" json:"auth-file-cleanup"`
+
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
 
@@ -162,6 +166,11 @@ type CodexBridgeConfig struct {
 	Enabled            bool   `yaml:"enabled" json:"enabled"`
 	BaseURL            string `yaml:"base-url" json:"base-url"`
 	AutoDeleteOnExpiry bool   `yaml:"auto-delete-on-expiry" json:"auto-delete-on-expiry"`
+}
+
+// AuthFileCleanupConfig controls global cleanup of invalid file-backed auth credentials.
+type AuthFileCleanupConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // TLSConfig holds HTTPS server settings.

@@ -1922,7 +1922,7 @@ func (m *Manager) MarkResult(ctx context.Context, result Result) {
 	if m.scheduler != nil && authSnapshot != nil {
 		m.scheduler.upsertAuth(authSnapshot)
 	}
-	m.maybeDeleteExpiredCodexBridgeAuth(authSnapshot, result)
+	m.maybeDeleteInvalidFileAuth(authSnapshot, result)
 
 	if clearModelQuota && result.Model != "" {
 		registry.GetGlobalRegistry().ClearModelQuotaExceeded(result.AuthID, result.Model)
@@ -1939,18 +1939,12 @@ func (m *Manager) MarkResult(ctx context.Context, result Result) {
 	m.hook.OnResult(ctx, result)
 }
 
-func (m *Manager) maybeDeleteExpiredCodexBridgeAuth(auth *Auth, result Result) {
+func (m *Manager) maybeDeleteInvalidFileAuth(auth *Auth, result Result) {
 	if m == nil || auth == nil || m.store == nil || result.Success {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex-bridge") {
-		return
-	}
-	if statusCodeFromResult(result.Error) != http.StatusUnauthorized {
-		return
-	}
 	cfg, _ := m.runtimeConfig.Load().(*internalconfig.Config)
-	if cfg == nil || !cfg.CodexBridge.AutoDeleteOnExpiry {
+	if !shouldDeleteInvalidFileAuth(cfg, auth, result) {
 		return
 	}
 	authID := strings.TrimSpace(auth.ID)
@@ -1959,9 +1953,72 @@ func (m *Manager) maybeDeleteExpiredCodexBridgeAuth(auth *Auth, result Result) {
 	}
 	go func(id string) {
 		if err := m.store.Delete(context.Background(), id); err != nil {
-			log.Warnf("codex bridge: failed to delete expired auth %s: %v", id, err)
+			log.Warnf("auth file cleanup: failed to delete invalid auth %s: %v", id, err)
 		}
 	}(authID)
+}
+
+func shouldDeleteInvalidFileAuth(cfg *internalconfig.Config, auth *Auth, result Result) bool {
+	if auth == nil || result.Success || !isFileBackedAuth(auth) {
+		return false
+	}
+	if cfg != nil && cfg.AuthFileCleanup.Enabled {
+		return shouldDeleteByGlobalAuthFileCleanup(result)
+	}
+	return shouldDeleteByLegacyCodexBridgeCleanup(cfg, auth, result)
+}
+
+func shouldDeleteByLegacyCodexBridgeCleanup(cfg *internalconfig.Config, auth *Auth, result Result) bool {
+	if cfg == nil || auth == nil || !cfg.CodexBridge.AutoDeleteOnExpiry {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex-bridge") {
+		return false
+	}
+	return statusCodeFromResult(result.Error) == http.StatusUnauthorized
+}
+
+func shouldDeleteByGlobalAuthFileCleanup(result Result) bool {
+	statusCode := statusCodeFromResult(result.Error)
+	switch statusCode {
+	case http.StatusPaymentRequired:
+		return true
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return hasCredentialInvalidationSignal(result.Error)
+	default:
+		return false
+	}
+}
+
+func hasCredentialInvalidationSignal(err *Error) bool {
+	if err == nil {
+		return false
+	}
+	payload := strings.ToLower(strings.TrimSpace(strings.Join([]string{err.Code, err.Message}, " ")))
+	if payload == "" {
+		return false
+	}
+	for _, marker := range []string{"invalid", "revoked", "rejected", "expired"} {
+		if strings.Contains(payload, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isFileBackedAuth(auth *Auth) bool {
+	if auth == nil {
+		return false
+	}
+	if strings.TrimSpace(auth.FileName) != "" {
+		return true
+	}
+	if auth.Attributes != nil {
+		if path := strings.TrimSpace(auth.Attributes["path"]); path != "" {
+			return true
+		}
+	}
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(auth.ID)), ".json")
 }
 
 func ensureModelState(auth *Auth, model string) *ModelState {
