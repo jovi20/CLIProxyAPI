@@ -6,6 +6,15 @@
 # Stop script execution on any error
 $ErrorActionPreference = "Stop"
 
+function Get-CodexBridgeProfileArgs {
+    $enableCodexBridge = Read-Host -Prompt "Enable chat2api codex-bridge profile? [y/N]"
+    if ($enableCodexBridge -match '^(?i:y(?:es)?)$') {
+        return @("--profile", "codex-bridge")
+    }
+
+    return @()
+}
+
 # --- Step 1: Choose Environment ---
 Write-Host "Please select an option:"
 Write-Host "1) Run using Pre-built Image (Recommended)"
@@ -16,7 +25,8 @@ $choice = Read-Host -Prompt "Enter choice [1-2]"
 switch ($choice) {
     "1" {
         Write-Host "--- Running with Pre-built Image ---"
-        docker compose up -d --remove-orphans --no-build
+        $ComposeProfileArgs = Get-CodexBridgeProfileArgs
+        docker compose @ComposeProfileArgs up -d --remove-orphans --no-build
         Write-Host "Services are starting from remote image."
         Write-Host "Run 'docker compose logs -f' to see the logs."
     }
@@ -40,8 +50,9 @@ switch ($choice) {
         Write-Host "Building the Docker image..."
         docker compose build --build-arg VERSION=$VERSION --build-arg COMMIT=$COMMIT --build-arg BUILD_DATE=$BUILD_DATE
 
+        $ComposeProfileArgs = Get-CodexBridgeProfileArgs
         Write-Host "Starting the services..."
-        docker compose up -d --remove-orphans --pull never
+        docker compose @ComposeProfileArgs up -d --remove-orphans --pull never
 
         Write-Host "Build complete. Services are starting."
         Write-Host "Run 'docker compose logs -f' to see the logs."

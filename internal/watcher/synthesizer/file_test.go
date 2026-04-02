@@ -156,6 +156,33 @@ func TestFileSynthesizer_Synthesize_GeminiProviderMapping(t *testing.T) {
 	}
 }
 
+func TestSynthesizeAuthFile_CodexWithoutRefreshTokenSetsBridgeMarker(t *testing.T) {
+	ctx := &SynthesisContext{
+		Config:      &config.Config{},
+		AuthDir:     "/tmp/auths",
+		Now:         time.Now(),
+		IDGenerator: NewStableIDGenerator(),
+	}
+
+	auths := SynthesizeAuthFile(ctx, "/tmp/auths/codex.json", []byte(`{
+		"type":"codex",
+		"email":"user@example.com",
+		"access_token":"at-123",
+		"refresh_token":""
+	}`))
+	if len(auths) != 1 {
+		t.Fatalf("expected 1 auth, got %d", len(auths))
+	}
+
+	auth := auths[0]
+	if auth.Provider != "codex" {
+		t.Fatalf("expected provider codex, got %s", auth.Provider)
+	}
+	if got := auth.Attributes["codex_no_rt"]; got != "true" {
+		t.Fatalf("expected codex_no_rt marker, got %q", got)
+	}
+}
+
 func TestFileSynthesizer_Synthesize_SkipsInvalidFiles(t *testing.T) {
 	tempDir := t.TempDir()
 
