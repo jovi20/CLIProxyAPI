@@ -1922,6 +1922,7 @@ func (m *Manager) MarkResult(ctx context.Context, result Result) {
 	if m.scheduler != nil && authSnapshot != nil {
 		m.scheduler.upsertAuth(authSnapshot)
 	}
+	m.maybeDeleteExpiredCodexBridgeAuth(authSnapshot, result)
 
 	if clearModelQuota && result.Model != "" {
 		registry.GetGlobalRegistry().ClearModelQuotaExceeded(result.AuthID, result.Model)
@@ -1936,6 +1937,31 @@ func (m *Manager) MarkResult(ctx context.Context, result Result) {
 	}
 
 	m.hook.OnResult(ctx, result)
+}
+
+func (m *Manager) maybeDeleteExpiredCodexBridgeAuth(auth *Auth, result Result) {
+	if m == nil || auth == nil || m.store == nil || result.Success {
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(auth.Provider), "codex-bridge") {
+		return
+	}
+	if statusCodeFromResult(result.Error) != http.StatusUnauthorized {
+		return
+	}
+	cfg, _ := m.runtimeConfig.Load().(*internalconfig.Config)
+	if cfg == nil || !cfg.CodexBridge.AutoDeleteOnExpiry {
+		return
+	}
+	authID := strings.TrimSpace(auth.ID)
+	if authID == "" {
+		return
+	}
+	go func(id string) {
+		if err := m.store.Delete(context.Background(), id); err != nil {
+			log.Warnf("codex bridge: failed to delete expired auth %s: %v", id, err)
+		}
+	}(authID)
 }
 
 func ensureModelState(auth *Auth, model string) *ModelState {

@@ -153,6 +153,8 @@ func createAuthForChannel(channel string) *Auth {
 		return &Auth{Provider: "vertex", Attributes: map[string]string{"auth_kind": "oauth"}}
 	case "codex":
 		return &Auth{Provider: "codex", Attributes: map[string]string{"auth_kind": "oauth"}}
+	case "codex-bridge":
+		return &Auth{Provider: "codex-bridge", Attributes: map[string]string{"auth_kind": "oauth"}}
 	case "aistudio":
 		return &Auth{Provider: "aistudio"}
 	case "antigravity":
@@ -176,6 +178,14 @@ func TestOAuthModelAliasChannel_Kimi(t *testing.T) {
 	}
 }
 
+func TestOAuthModelAliasChannel_CodexBridge(t *testing.T) {
+	t.Parallel()
+
+	if got := OAuthModelAliasChannel("codex-bridge", "oauth"); got != "codex-bridge" {
+		t.Fatalf("OAuthModelAliasChannel() = %q, want %q", got, "codex-bridge")
+	}
+}
+
 func TestApplyOAuthModelAlias_SuffixPreservation(t *testing.T) {
 	t.Parallel()
 
@@ -192,5 +202,20 @@ func TestApplyOAuthModelAlias_SuffixPreservation(t *testing.T) {
 	resolvedModel := mgr.applyOAuthModelAlias(auth, "gemini-2.5-pro(8192)")
 	if resolvedModel != "gemini-2.5-pro-exp-03-25(8192)" {
 		t.Errorf("applyOAuthModelAlias() model = %q, want %q", resolvedModel, "gemini-2.5-pro-exp-03-25(8192)")
+	}
+}
+
+func TestResolveOAuthUpstreamModel_CodexBridgeChannel(t *testing.T) {
+	t.Parallel()
+
+	mgr := NewManager(nil, nil, nil)
+	mgr.SetConfig(&internalconfig.Config{})
+	mgr.SetOAuthModelAlias(map[string][]internalconfig.OAuthModelAlias{
+		"codex-bridge": {{Name: "gpt-5.4", Alias: "gpt-5.4-web"}},
+	})
+
+	auth := createAuthForChannel("codex-bridge")
+	if got := mgr.resolveOAuthUpstreamModel(auth, "gpt-5.4-web"); got != "gpt-5.4" {
+		t.Fatalf("resolveOAuthUpstreamModel() = %q, want %q", got, "gpt-5.4")
 	}
 }
