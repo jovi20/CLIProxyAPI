@@ -68,6 +68,50 @@ Get 10% OFF GLM CODING PLAN：https://z.ai/subscribe?ic=8JVLJQFSKB
 
 CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
+## 2026-04-03 Update: Codex Bridge and Docker Build
+
+This update adds an automatic `codex-bridge` fallback for Codex auth files that only contain an `access_token`, and updates the Docker startup flow for the bundled `chat2api` sidecar.
+
+### Implementation
+
+- When a `codex` auth file is loaded or synthesized, a missing `refresh_token` is marked as `codex_no_rt=true`.
+- At runtime, CPA rewrites that auth from `codex` to `codex-bridge`, copies `access_token` to `api_key`, and pins `base_url` to `http://chat2api:5005/v1`.
+- `codex-bridge` is executed through the OpenAI-compatible executor, while the model registry still exposes the Codex catalog to clients.
+- The `codex-bridge` model alias table is built in, so older Codex-facing model names can still be resolved to ChatGPT Web-compatible upstream names.
+- `docker-build.sh` and `docker-build.ps1` now prompt whether to enable the `codex-bridge` compose profile, and `docker-compose.yml` now publishes the main service on `8317:8317`.
+
+### Codex Bridge Model Mapping
+
+| Client-facing model | Upstream model sent to `chat2api` | Mapping |
+| --- | --- | --- |
+| `gpt-5.4` | `gpt-5.4` | direct |
+| `gpt-5.2` | `gpt-5.4` | built-in alias |
+| `gpt-5.2-codex` | `gpt-5.4` | built-in alias |
+| `gpt-5.3-codex` | `gpt-5.4` | built-in alias |
+| `gpt-5.1-codex-max` | `gpt-5.4` | built-in alias |
+| `gpt-5` | `gpt-5.3` | built-in alias |
+| `gpt-5-codex` | `gpt-5.3` | built-in alias |
+| `gpt-5-codex-mini` | `gpt-5.3` | built-in alias |
+| `gpt-5.1` | `gpt-5.3` | built-in alias |
+| `gpt-5.1-codex` | `gpt-5.3` | built-in alias |
+| `gpt-5.1-codex-mini` | `gpt-5.3` | built-in alias |
+| `gpt-5.3-codex-spark` | `gpt-5.3` | built-in alias |
+
+> [!NOTE]
+> `codex-bridge` aliases are hardcoded in the runtime. `oauth-model-alias.codex-bridge` from `config.yaml` is ignored.
+
+### Fixed Parameters
+
+| Item | Value | Notes |
+| --- | --- | --- |
+| Compose profile | `codex-bridge` | Starts the bundled `chat2api` sidecar |
+| Bridge base URL | `http://chat2api:5005/v1` | Runtime constant used for bridged Codex auths |
+| Main published port | `8317:8317` | Replaces the old `8318:8317` mapping |
+| `chat2api` port | `5005:5005` | Used by the optional sidecar service |
+| Bridge trigger | missing `refresh_token` + non-empty `access_token` | Automatically marks `codex_no_rt=true` |
+| Built-in `chat2api` env | `HISTORY_DISABLED=true`, `CONVERSATION_ONLY=false`, `ENABLE_LIMIT=true`, `RANDOM_TOKEN=false`, `SCHEDULED_REFRESH=false` | Compose defaults |
+| Usage backup mode | `./docker-build.sh --with-usage` | Exports/imports through the published host port from `config.yaml` and `docker-compose.yml` |
+
 ## Management API
 
 see [MANAGEMENT_API.md](https://help.router-for.me/management/api)

@@ -68,6 +68,50 @@ GLM CODING PLAN 是专为AI编码打造的订阅套餐，每月最低仅需20元
 
 CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-for.me/cn/)
 
+## 2026-04-03 更新：Codex Bridge 与 Docker 构建
+
+这次更新把无 `refresh_token` 的 Codex 账号正式接入了自动 `codex-bridge` 降级链路，也同步整理了内置 `chat2api` sidecar 的 Docker 启动流程。
+
+### 实现方式
+
+- 当 `codex` 类型的 auth 文件被读取或 watcher 合成时，如果缺少 `refresh_token`，系统会自动打上 `codex_no_rt=true` 标记。
+- 运行时会把这类账号从 `codex` 重写为 `codex-bridge`，并把 `access_token` 映射到 `api_key`，同时固定写入 `base_url=http://chat2api:5005/v1`。
+- `codex-bridge` 走的是 OpenAI 兼容执行器，但对外仍然注册 Codex 模型目录，因此客户端继续按 Codex 风格模型名调用即可。
+- `codex-bridge` 的模型别名表是内置的，旧的 Codex 模型名会在代理内部自动映射到 ChatGPT Web / `chat2api` 可接受的上游模型名。
+- `docker-build.sh` 与 `docker-build.ps1` 现在都会询问是否启用 `codex-bridge` compose profile，`docker-compose.yml` 也统一改成了主服务 `8317:8317` 端口映射。
+
+### 模型对照表
+
+| 客户端请求模型 | 实际发送到 `chat2api` 的上游模型 | 映射方式 |
+| --- | --- | --- |
+| `gpt-5.4` | `gpt-5.4` | 直连 |
+| `gpt-5.2` | `gpt-5.4` | 内置别名 |
+| `gpt-5.2-codex` | `gpt-5.4` | 内置别名 |
+| `gpt-5.3-codex` | `gpt-5.4` | 内置别名 |
+| `gpt-5.1-codex-max` | `gpt-5.4` | 内置别名 |
+| `gpt-5` | `gpt-5.3` | 内置别名 |
+| `gpt-5-codex` | `gpt-5.3` | 内置别名 |
+| `gpt-5-codex-mini` | `gpt-5.3` | 内置别名 |
+| `gpt-5.1` | `gpt-5.3` | 内置别名 |
+| `gpt-5.1-codex` | `gpt-5.3` | 内置别名 |
+| `gpt-5.1-codex-mini` | `gpt-5.3` | 内置别名 |
+| `gpt-5.3-codex-spark` | `gpt-5.3` | 内置别名 |
+
+> [!NOTE]
+> `codex-bridge` 的别名规则是运行时硬编码的，`config.yaml` 里的 `oauth-model-alias.codex-bridge` 不会生效。
+
+### 固定配置参数
+
+| 参数项 | 固定值 | 说明 |
+| --- | --- | --- |
+| Compose Profile | `codex-bridge` | 用于启动内置 `chat2api` sidecar |
+| Bridge Base URL | `http://chat2api:5005/v1` | bridged Codex 账号运行时固定使用 |
+| 主服务端口映射 | `8317:8317` | 替代旧的 `8318:8317` |
+| `chat2api` 端口 | `5005:5005` | sidecar 服务固定端口 |
+| Bridge 触发条件 | 缺少 `refresh_token` 且存在 `access_token` | 自动打上 `codex_no_rt=true` |
+| 内置 `chat2api` 环境变量 | `HISTORY_DISABLED=true`、`CONVERSATION_ONLY=false`、`ENABLE_LIMIT=true`、`RANDOM_TOKEN=false`、`SCHEDULED_REFRESH=false` | `docker-compose.yml` 默认值 |
+| 用量保留模式 | `./docker-build.sh --with-usage` | 会按 `config.yaml` 与 `docker-compose.yml` 解析出的宿主机端口执行导出/导入 |
+
 ## 管理 API 文档
 
 请参见 [MANAGEMENT_API_CN.md](https://help.router-for.me/cn/management/api)
