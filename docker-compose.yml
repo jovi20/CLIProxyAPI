@@ -25,11 +25,11 @@ services:
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs
     restart: unless-stopped
 
-  # Enable with `docker compose --profile codex-bridge up -d`.
   chat2api:
-    profiles:
-      - codex-bridge
-    image: lanqian528/chat2api:latest
+    build:
+      context: ./third_party/chat2api
+      dockerfile: Dockerfile
+    image: cliproxyapi-chat2api:local
     container_name: chat2api
     ports:
       - "5005:5005"

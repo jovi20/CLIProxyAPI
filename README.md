@@ -70,7 +70,7 @@ CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
 ## 2026-04-03 Update: Codex Bridge and Docker Build
 
-This update adds an automatic `codex-bridge` fallback for Codex auth files that only contain an `access_token`, and updates the Docker startup flow for the bundled `chat2api` sidecar.
+This update adds an automatic `codex-bridge` fallback for Codex auth files that only contain an `access_token`, and updates the Docker startup flow for the bundled vendored `chat2api` sidecar.
 
 ### Implementation
 
@@ -78,7 +78,8 @@ This update adds an automatic `codex-bridge` fallback for Codex auth files that 
 - At runtime, CPA rewrites that auth from `codex` to `codex-bridge`, copies `access_token` to `api_key`, and pins `base_url` to `http://chat2api:5005/v1`.
 - `codex-bridge` is executed through the OpenAI-compatible executor, while the model registry still exposes the Codex catalog to clients.
 - The `codex-bridge` model alias table is built in, so older Codex-facing model names can still be resolved to ChatGPT Web-compatible upstream names.
-- `docker-build.sh` and `docker-build.ps1` now prompt whether to enable the `codex-bridge` compose profile, and `docker-compose.yml` now publishes the main service on `8317:8317`.
+- `chat2api` is now vendored in-repo under `third_party/chat2api` and built locally by Docker instead of pulling `lanqian528/chat2api:latest`.
+- `docker-build.sh` and `docker-build.ps1` now start the vendored `chat2api` sidecar by default alongside the main service, and `docker-compose.yml` now publishes the main service on `8317:8317`.
 
 ### Codex Bridge Model Mapping
 
@@ -104,10 +105,10 @@ This update adds an automatic `codex-bridge` fallback for Codex auth files that 
 
 | Item | Value | Notes |
 | --- | --- | --- |
-| Compose profile | `codex-bridge` | Starts the bundled `chat2api` sidecar |
+| Bundled `chat2api` source | `third_party/chat2api` | Vendored upstream copy used for local Docker builds |
 | Bridge base URL | `http://chat2api:5005/v1` | Runtime constant used for bridged Codex auths |
 | Main published port | `8317:8317` | Replaces the old `8318:8317` mapping |
-| `chat2api` port | `5005:5005` | Used by the optional sidecar service |
+| `chat2api` port | `5005:5005` | Used by the bundled sidecar service |
 | Bridge trigger | missing `refresh_token` + non-empty `access_token` | Automatically marks `codex_no_rt=true` |
 | Built-in `chat2api` env | `HISTORY_DISABLED=true`, `CONVERSATION_ONLY=false`, `ENABLE_LIMIT=true`, `RANDOM_TOKEN=false`, `SCHEDULED_REFRESH=false` | Compose defaults |
 | Usage backup mode | `./docker-build.sh --with-usage` | Exports/imports through the published host port from `config.yaml` and `docker-compose.yml` |

@@ -70,7 +70,7 @@ CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-fo
 
 ## 2026-04-03 更新：Codex Bridge 与 Docker 构建
 
-这次更新把无 `refresh_token` 的 Codex 账号正式接入了自动 `codex-bridge` 降级链路，也同步整理了内置 `chat2api` sidecar 的 Docker 启动流程。
+这次更新把无 `refresh_token` 的 Codex 账号正式接入了自动 `codex-bridge` 降级链路，也同步整理了内置 vendored `chat2api` sidecar 的 Docker 启动流程。
 
 ### 实现方式
 
@@ -78,7 +78,8 @@ CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-fo
 - 运行时会把这类账号从 `codex` 重写为 `codex-bridge`，并把 `access_token` 映射到 `api_key`，同时固定写入 `base_url=http://chat2api:5005/v1`。
 - `codex-bridge` 走的是 OpenAI 兼容执行器，但对外仍然注册 Codex 模型目录，因此客户端继续按 Codex 风格模型名调用即可。
 - `codex-bridge` 的模型别名表是内置的，旧的 Codex 模型名会在代理内部自动映射到 ChatGPT Web / `chat2api` 可接受的上游模型名。
-- `docker-build.sh` 与 `docker-build.ps1` 现在都会询问是否启用 `codex-bridge` compose profile，`docker-compose.yml` 也统一改成了主服务 `8317:8317` 端口映射。
+- `chat2api` 现已 vendor 到仓库内的 `third_party/chat2api`，Docker 会优先从本地源码构建，不再拉取 `lanqian528/chat2api:latest`。
+- `docker-build.sh` 与 `docker-build.ps1` 现在默认会和主服务一起启动 vendored `chat2api` sidecar，`docker-compose.yml` 也统一改成了主服务 `8317:8317` 端口映射。
 
 ### 模型对照表
 
@@ -104,10 +105,10 @@ CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-fo
 
 | 参数项 | 固定值 | 说明 |
 | --- | --- | --- |
-| Compose Profile | `codex-bridge` | 用于启动内置 `chat2api` sidecar |
+| 内置 `chat2api` 源码位置 | `third_party/chat2api` | vendored 上游副本，供 Docker 本地构建使用 |
 | Bridge Base URL | `http://chat2api:5005/v1` | bridged Codex 账号运行时固定使用 |
 | 主服务端口映射 | `8317:8317` | 替代旧的 `8318:8317` |
-| `chat2api` 端口 | `5005:5005` | sidecar 服务固定端口 |
+| `chat2api` 端口 | `5005:5005` | 内置 sidecar 服务固定端口 |
 | Bridge 触发条件 | 缺少 `refresh_token` 且存在 `access_token` | 自动打上 `codex_no_rt=true` |
 | 内置 `chat2api` 环境变量 | `HISTORY_DISABLED=true`、`CONVERSATION_ONLY=false`、`ENABLE_LIMIT=true`、`RANDOM_TOKEN=false`、`SCHEDULED_REFRESH=false` | `docker-compose.yml` 默认值 |
 | 用量保留模式 | `./docker-build.sh --with-usage` | 会按 `config.yaml` 与 `docker-compose.yml` 解析出的宿主机端口执行导出/导入 |

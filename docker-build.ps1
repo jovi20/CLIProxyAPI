@@ -6,28 +6,46 @@
 # Stop script execution on any error
 $ErrorActionPreference = "Stop"
 
-function Get-CodexBridgeProfileArgs {
-    $enableCodexBridge = Read-Host -Prompt "Enable chat2api codex-bridge profile? [y/N]"
-    if ($enableCodexBridge -match '^(?i:y(?:es)?)$') {
-        return @("--profile", "codex-bridge")
+function Test-LocalComposeImage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName
+    )
+
+    $imageId = docker compose images -q $ServiceName 2>$null
+    return -not [string]::IsNullOrWhiteSpace($imageId)
+}
+
+function Assert-LocalComposeImages {
+    $requiredServices = @("cli-proxy-api", "chat2api")
+    $missingServices = @()
+
+    foreach ($service in $requiredServices) {
+        if (-not (Test-LocalComposeImage -ServiceName $service)) {
+            $missingServices += $service
+        }
     }
 
-    return @()
+    if ($missingServices.Count -gt 0) {
+        Write-Host "No existing local image was found for: $($missingServices -join ', ')"
+        Write-Host "Choose option 2 to build locally first."
+        exit 1
+    }
 }
 
 # --- Step 1: Choose Environment ---
 Write-Host "Please select an option:"
-Write-Host "1) Run using Pre-built Image (Recommended)"
+Write-Host "1) Run using Existing Local Images (No Rebuild)"
 Write-Host "2) Build from Source and Run (For Developers)"
 $choice = Read-Host -Prompt "Enter choice [1-2]"
 
 # --- Step 2: Execute based on choice ---
 switch ($choice) {
     "1" {
-        Write-Host "--- Running with Pre-built Image ---"
-        $ComposeProfileArgs = Get-CodexBridgeProfileArgs
-        docker compose @ComposeProfileArgs up -d --remove-orphans --no-build
-        Write-Host "Services are starting from remote image."
+        Write-Host "--- Running with Existing Local Images (No Rebuild) ---"
+        Assert-LocalComposeImages
+        docker compose up -d --remove-orphans --no-build
+        Write-Host "Services are starting from local images."
         Write-Host "Run 'docker compose logs -f' to see the logs."
     }
     "2" {
@@ -44,15 +62,11 @@ switch ($choice) {
         Write-Host "  Build Date: $BUILD_DATE"
         Write-Host "----------------------------------------"
 
-        # Build and start the services with a local-only image tag
-        $env:CLI_PROXY_IMAGE = "cli-proxy-api:local"
-        
-        Write-Host "Building the Docker image..."
+        Write-Host "Building the Docker images..."
         docker compose build --build-arg VERSION=$VERSION --build-arg COMMIT=$COMMIT --build-arg BUILD_DATE=$BUILD_DATE
 
-        $ComposeProfileArgs = Get-CodexBridgeProfileArgs
         Write-Host "Starting the services..."
-        docker compose @ComposeProfileArgs up -d --remove-orphans --pull never
+        docker compose up -d --remove-orphans --pull never
 
         Write-Host "Build complete. Services are starting."
         Write-Host "Run 'docker compose logs -f' to see the logs."

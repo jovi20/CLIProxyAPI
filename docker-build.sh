@@ -19,7 +19,7 @@ CONFIG_FILE="config.yaml"
 DEFAULT_PORT="8317"
 SERVICE_NAME="cli-proxy-api"
 WITH_USAGE=false
-ENABLE_CODEX_BRIDGE=false
+REQUIRED_LOCAL_SERVICES=("cli-proxy-api" "chat2api")
 
 config_exists() {
   [[ -f "${CONFIG_FILE}" ]]
@@ -50,27 +50,6 @@ get_port() {
   fi
 
   echo "${DEFAULT_PORT}"
-}
-
-compose_has_service_image() {
-  [[ -f "${COMPOSE_FILE}" ]] || return 1
-
-  awk -v service="${SERVICE_NAME}" '
-    $0 ~ "^  " service ":" {
-      in_service = 1
-      next
-    }
-    in_service && $0 ~ "^  [A-Za-z0-9_-]+:" {
-      in_service = 0
-    }
-    in_service && $0 ~ "^    image:" {
-      found = 1
-      exit
-    }
-    END {
-      exit(found ? 0 : 1)
-    }
-  ' "${COMPOSE_FILE}"
 }
 
 get_local_port() {
@@ -117,29 +96,24 @@ get_local_port() {
 }
 
 has_existing_local_image() {
-  docker compose images -q "${SERVICE_NAME}" 2>/dev/null | grep -q '[^[:space:]]'
+  local service="${1:?service name required}"
+  docker compose images -q "${service}" 2>/dev/null | grep -q '[^[:space:]]'
 }
 
-prompt_codex_bridge() {
-  local answer
-  if ! read -r -p "Enable chat2api codex-bridge profile? [y/N]: " answer; then
-    answer=""
-  fi
-  case "${answer}" in
-    [Yy]|[Yy][Ee][Ss])
-      ENABLE_CODEX_BRIDGE=true
-      ;;
-    *)
-      ENABLE_CODEX_BRIDGE=false
-      ;;
-  esac
-}
+assert_existing_local_images() {
+  local missing=()
+  local service
 
-compose_up() {
-  if [[ "${ENABLE_CODEX_BRIDGE}" == "true" ]]; then
-    docker compose --profile codex-bridge up "$@"
-  else
-    docker compose up "$@"
+  for service in "${REQUIRED_LOCAL_SERVICES[@]}"; do
+    if ! has_existing_local_image "${service}"; then
+      missing+=("${service}")
+    fi
+  done
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "No existing local image was found for: ${missing[*]}"
+    echo "Use option 2 to build locally first."
+    exit 1
   fi
 }
 
@@ -230,43 +204,27 @@ wait_for_service() {
 
 print_menu() {
   echo "Please select an option:"
-  if compose_has_service_image; then
-    echo "1) Run using Pre-built Image (Recommended)"
-  else
-    echo "1) Run using Existing Local Image (No Rebuild)"
-  fi
+  echo "1) Run using Existing Local Images (No Rebuild)"
   echo "2) Build from Source and Run (For Developers)"
 }
 
 run_no_rebuild_mode() {
   ensure_config_exists
-
-  if compose_has_service_image; then
-    echo "--- Running with Pre-built Image ---"
-  else
-    echo "--- Running with Existing Local Image (No Rebuild) ---"
-    if ! has_existing_local_image; then
-      echo "Current ${COMPOSE_FILE} does not define a pre-built image for ${SERVICE_NAME}."
-      echo "No existing local image was found."
-      echo "Use option 2 to build locally first."
-      exit 1
-    fi
-  fi
-
-  prompt_codex_bridge
+  echo "--- Running with Existing Local Images (No Rebuild) ---"
+  assert_existing_local_images
 
   if [[ "${WITH_USAGE}" == "true" ]]; then
     export_stats
   fi
 
-  compose_up -d --remove-orphans --no-build
+  docker compose up -d --remove-orphans --no-build
 
   if [[ "${WITH_USAGE}" == "true" ]]; then
     wait_for_service
     import_stats
   fi
 
-  echo "Services are starting."
+  echo "Services are starting from local images."
   echo "Run 'docker compose logs -f' to see the logs."
 }
 
@@ -287,20 +245,18 @@ run_build_mode() {
   echo "  Build Date: ${build_date}"
   echo "----------------------------------------"
 
-  echo "Building the Docker image..."
+  echo "Building the Docker images..."
   docker compose build \
     --build-arg VERSION="${version}" \
     --build-arg COMMIT="${commit}" \
     --build-arg BUILD_DATE="${build_date}"
-
-  prompt_codex_bridge
 
   if [[ "${WITH_USAGE}" == "true" ]]; then
     export_stats
   fi
 
   echo "Starting the services..."
-  compose_up -d --remove-orphans --pull never
+  docker compose up -d --remove-orphans --pull never
 
   if [[ "${WITH_USAGE}" == "true" ]]; then
     wait_for_service
